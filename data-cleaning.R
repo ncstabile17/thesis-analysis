@@ -17,7 +17,7 @@ append_permit_data <- function(.year) {
     rename_with(tolower) %>%
     filter(permit_subtype_name == "NEW BUILDING") %>% 
     select(-permit_category_name)
-  
+
   all_permits <- bind_rows(
     all_permits,
     new_permit_data
@@ -32,5 +32,5 @@ permit_years <- c("2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016"
 
 all_permits <- map_df(permit_years, .f = ~append_permit_data(.year = .x))
 
-
+write.csv(all_permits, "data/all_new_building_permits.csv")
 

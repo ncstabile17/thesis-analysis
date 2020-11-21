@@ -12,9 +12,13 @@ library(jsonlite)
 # and get a sense of some of my key variables
 
 # reading in and setting API key
-census_key <- read_file("data/census_api_key.txt")
+# census_key <- read_file("data/census_api_key.txt")
 
-census_api_key(census_key, install = TRUE, overwrite = TRUE)
+# census_api_key(census_key, install = TRUE, overwrite = TRUE)
+
+# reading in permits data
+all_new_building_permits <- read_csv("data/all_new_building_permits.csv") %>% 
+  mutate(address_id = as.character(maraddressrepositoryid))
 
 make_acs_map <- function(year, census_var, state_fips, county_fips, geometry_flag) {
   
@@ -58,6 +62,42 @@ ggplot(data = rent_data_change) +
   geom_sf(aes(fill = rent_change)) +
   theme_void()
 
-ggplot(data = all_permits) +
-  geom_sf(aes(fill = rent_change)) +
+
+# now working with the permits data 
+
+all_new_building_permits <- st_as_sf(
+  all_new_building_permits,
+  coords = c("longitude", "latitude"),
+  crs = 4326,
+  remove = FALSE)
+
+dc_tracts <- st_read("data/Census_Tracts_in_2010.shp") %>% 
+  select(TRACT, GEOID, geometry)
+
+# Permit data doesn't have tract or geoID information, adding additional data source
+dc_addresses <- st_read("data/Address_Points.csv") %>% 
+  select(address_id = ADDRESS_ID, TRACT = CENSUS_TRACT)
+
+all_new_building_permits <- 
+  left_join(all_new_building_permits, dc_addresses, by = "address_id")
+
+all_new_permits_merged <- st_join(
+  all_new_building_permits, # points
+  dc_tracts, # polygons
+  join = st_within
+)
+
+all_new_permits_merged <- st_set_geometry(all_new_permits_merged, NULL)
+all_new_permits_by_tract <- all_new_permits_merged %>%
+  group_by(GEOID) %>%
+  summarize(
+    permit_count = n(),
+  )
+
+all_new_permits_by_tract <- dc_tracts %>%
+  left_join(all_new_permits_by_tract, by = "GEOID")
+
+# TODO: something looks wrong here, but maybe not?
+ggplot(data = all_new_permits_by_tract) +
+  geom_sf(aes(fill = permit_count)) +
   theme_void()
