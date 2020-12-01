@@ -72,20 +72,20 @@ ggplot(data = rent_data_change) +
   geom_sf(aes(fill = rent_change)) +
   theme_void() +
   scale_fill_continuous(
-    low = "white", high = "blue", name = "Rent Change 2010-2018"
+    low = "white", high = "blue", name = "% Rent Change 2010-2018"
   )
 
 
 # now working with Jenny Schuetz's permit data
 
-# adding geometry data from Census tract shape file
-schuetz_permits_geo <- left_join(
+# adding permit data to rent data
+rent_data_change <- left_join(
+  rent_data_change,
   schuetz_permits, 
-  dc_tracts
 )
 
-ggplot(data = schuetz_permits_geo) +
-  geom_sf(aes(fill = new_units, geometry = geometry)) +
+ggplot(data = rent_data_change) +
+  geom_sf(aes(fill = new_units)) +
   theme_void() + 
   scale_fill_continuous(
     low = "white", high = "blue", name = "New Units 2008-2016", label = scales::comma
