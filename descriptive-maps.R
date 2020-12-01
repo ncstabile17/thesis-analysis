@@ -18,7 +18,17 @@ library(jsonlite)
 
 # reading in permits data
 all_new_building_permits <- read_csv("data/all_new_building_permits.csv") %>% 
-  mutate(address_id = as.character(maraddressrepositoryid))
+  mutate(address_id = as.character(maraddressrepositoryid)) 
+
+# reading in DC Census tract shape files
+dc_tracts <- st_read("data/Census_Tracts_in_2010.shp") %>% 
+  select(TRACT, GEOID, geometry)
+
+# reading in permits data from Jenny Schuetz
+schuetz_permits <- read_csv("data/tract_permits-GEOID.csv") %>% 
+  mutate(GEOID = as.character(GEOID)) %>% 
+  rename(new_permits = 'Permits, new construction',
+         new_units = 'Units permitted')
 
 make_acs_map <- function(year, census_var, state_fips, county_fips, geometry_flag) {
   
@@ -60,19 +70,34 @@ rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>%
 
 ggplot(data = rent_data_change) +
   geom_sf(aes(fill = rent_change)) +
-  theme_void()
+  theme_void() +
+  scale_fill_continuous(
+    low = "white", high = "blue", name = "Rent Change 2010-2018"
+  )
 
 
-# now working with the permits data 
+# now working with Jenny Schuetz's permit data
+
+# adding geometry data from Census tract shape file
+schuetz_permits_geo <- left_join(
+  schuetz_permits, 
+  dc_tracts
+)
+
+ggplot(data = schuetz_permits_geo) +
+  geom_sf(aes(fill = new_units, geometry = geometry)) +
+  theme_void() + 
+  scale_fill_continuous(
+    low = "white", high = "blue", name = "New Units 2008-2016", label = scales::comma
+  )
+
+# now working with the permits data from DC Open Data
 
 all_new_building_permits <- st_as_sf(
   all_new_building_permits,
   coords = c("longitude", "latitude"),
   crs = 4326,
   remove = FALSE)
-
-dc_tracts <- st_read("data/Census_Tracts_in_2010.shp") %>% 
-  select(TRACT, GEOID, geometry)
 
 # Permit data doesn't have tract or geoID information, adding additional data source
 dc_addresses <- st_read("data/Address_Points.csv") %>% 
