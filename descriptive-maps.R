@@ -82,8 +82,12 @@ rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>%
 ggplot(data = rent_data_change) +
   geom_sf(aes(fill = rent_change)) +
   theme_void() +
-  scale_fill_continuous(
-    low = "white", high = "blue", name = "% Rent Change 2010-2018"
+  scale_fill_distiller(name = "% Rent Change 2010-2018",
+                       palette = "YlGnBu") +
+  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
   )
 
 
@@ -98,9 +102,15 @@ rent_data_change <- left_join(
 ggplot(data = rent_data_change) +
   geom_sf(aes(fill = new_units)) +
   theme_void() + 
-  scale_fill_continuous(
-    low = "white", high = "blue", name = "New Units 2008-2016", label = scales::comma
+  scale_fill_distiller(name = "New Units 2008-2016",
+                       palette = "YlGnBu",
+                       labels = comma) +
+  ggtitle("New housing units highly concentrated in few Census tracts") +
+  labs(caption = str_wrap("Source: Data compiled by and used with permission from Jenny Schuetz of the Brookings Institution. For data collection details, see Schuetz, J. (2019). Teardowns, popups, and renovations: How does housing supply change? Journal of Regional Science, 60(3), 459-480. doi:10.1111/jors.12470.", 100)) +
+  theme(
+    plot.caption = element_text(hjust = 0)
   )
+
 
 # now working with the permits data from DC Open Data
 
@@ -135,9 +145,9 @@ all_new_permits_by_tract <- dc_tracts_2010 %>%
   left_join(all_new_permits_by_tract, by = "GEOID")
 
 # TODO: something looks wrong here, but maybe not?
-ggplot(data = all_new_permits_by_tract) +
-  geom_sf(aes(fill = permit_count)) +
-  theme_void()
+# ggplot(data = all_new_permits_by_tract) +
+#   geom_sf(aes(fill = permit_count)) +
+#   theme_void()
 
 # Working with HMDA data
 
