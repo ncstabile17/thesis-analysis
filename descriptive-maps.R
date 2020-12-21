@@ -7,6 +7,8 @@ library(gridExtra)
 library(tidycensus)
 library(httr)
 library(jsonlite)
+library(RColorBrewer)
+library(scales)
 
 # I want to get some Census data so I can make some maps to look at how things have changed 
 # and get a sense of some of my key variables
@@ -22,13 +24,19 @@ all_new_building_permits <- read_csv("data/all_new_building_permits.csv") %>%
 
 # reading in DC Census tract shape files
 dc_tracts_2010 <- st_read("data/Census_Tracts_in_2010.shp") %>% 
-  select(TRACT, GEOID, geometry)
+  select(census_tract = TRACT, GEOID, geometry)
 
 # reading in permits data from Jenny Schuetz
 schuetz_permits <- read_csv("data/tract_permits-GEOID.csv") %>% 
   mutate(GEOID = as.character(GEOID)) %>% 
   rename(new_permits = 'Permits, new construction',
          new_units = 'Units permitted')
+
+# reading in HMDA data
+all_hmda <- read_csv("data/all_hmda.csv") %>% 
+  rename(census_tract = census_tract_number)
+
+all_hmda$census_tract <- str_remove_all(all_hmda$census_tract, "[.]")
 
 # Custom function to get arbitrary ACS data
 make_acs_map <- function(year, census_var, state_fips, county_fips, geometry_flag) {
@@ -104,7 +112,7 @@ all_new_building_permits <- st_as_sf(
 
 # Permit data doesn't have tract or geoID information, adding additional data source
 dc_addresses <- st_read("data/Address_Points.csv") %>% 
-  select(address_id = ADDRESS_ID, TRACT = CENSUS_TRACT)
+  select(address_id = ADDRESS_ID, census_tract = CENSUS_TRACT)
 
 all_new_building_permits <- 
   left_join(all_new_building_permits, dc_addresses, by = "address_id")
@@ -133,4 +141,68 @@ ggplot(data = all_new_permits_by_tract) +
 
 # Working with HMDA data
 
+all_hmda_by_tract <- all_hmda %>%
+  group_by(census_tract) %>%
+  summarize(
+    total_loan_amount_000s = sum(loan_amount_000s),
+    num_loans = n()
+  )
 
+all_hmda_by_tract <- dc_tracts_2010 %>%
+  left_join(all_hmda_by_tract, by = "census_tract")
+
+ggplot(data = all_hmda_by_tract) +
+  geom_sf(aes(fill = total_loan_amount_000s)) +
+  scale_fill_distiller(palette = "YlGnBu",
+                       name = "Total Loans in 000s",
+                       labels = dollar_format()) +
+  ggtitle(str_wrap("Total mortgage loan amounts highest west of Rock Creek Park from 2007-2017", 70)) +
+  labs(caption = str_wrap("Source: 2007-2017 DC Home Mortgage Disclosure Act (HMDA) data available through Consumer Financial Protection Bureau", 100)) +
+  theme_void() + 
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+ggplot(data = all_hmda_by_tract) +
+  geom_sf(aes(fill = num_loans)) +
+  scale_fill_distiller(palette = "YlGnBu",
+                       name = "Total Number of Loans",
+                       labels = comma) +
+  ggtitle(str_wrap("Mortgage loans concentrated west of Rock Creek Park and center of city from 2007-2017", 70)) +
+  labs(caption = str_wrap("Source: 2007-2017 DC Home Mortgage Disclosure Act (HMDA) data available through Consumer Financial Protection Bureau", 100)) +
+  theme_void() + 
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+all_hmda %>% 
+  group_by(applicant_race_name_1) %>% 
+  summarize(total_loan_amount_000s = sum(loan_amount_000s)) %>% 
+  mutate(applicant_race_name_1 = 
+           str_replace_all(applicant_race_name_1, 
+                           c("Information not provided by applicant in mail, Internet, or telephone application" = "Not Provided"))) %>% 
+  ggplot() +
+  geom_col(aes(x = reorder(str_wrap(applicant_race_name_1, 15), -total_loan_amount_000s), 
+               y = total_loan_amount_000s),
+           fill = "#326fa8") +
+  scale_y_continuous(labels = dollar_format()) +
+  ylab("Total Loan Amount in 000s") +
+  xlab("Applicant Race") +
+  ggtitle(str_wrap("White mortgage applicants received large share of loan amount from 2007-2017 in DC", 70)) +
+  labs(caption = "Source: 2007-2017 DC Home Mortgage Disclosure Act (HMDA) data available through Consumer Financial Protection Bureau") +
+  theme_minimal()
+
+all_hmda %>% 
+  group_by(year) %>% 
+  summarize(total_loan_amount_000s = sum(loan_amount_000s)) %>%
+  ggplot(aes(x = factor(year), 
+          y = total_loan_amount_000s, group=1)) +
+  geom_line() +
+  geom_point() +
+  scale_y_continuous(labels = dollar_format(),
+                     name = "Total Loan Amount in 000s") +
+  xlab("Year") +
+  ggtitle(str_wrap("Total mortgage loan amount varied widely from 2007-2017 in DC", 70)) +
+  labs(caption = "Source: 2007-2017 DC Home Mortgage Disclosure Act (HMDA) data available through Consumer Financial Protection Bureau") +
+  theme_minimal()
+  
