@@ -107,7 +107,10 @@ combined_rent_data <- list(rent_2010, rent_2019,
                rented_not_occupied_2010, rented_not_occupied_2019) %>% 
   reduce(left_join, by = "GEOID") %>% 
   mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
-         rent_change = med_rent_2019 - med_rent_2010)
+         rent_change = med_rent_2019 - med_rent_2010,
+         all_rental_units_2010 = renter_occupied_2010 + rented_not_occupied_2010 + vacant_for_rent_2010,
+         all_rental_units_2019 = renter_occupied_2019 + rented_not_occupied_2019 + vacant_for_rent_2019,
+         rental_unit_change = all_rental_units_2019 - all_rental_units_2010)
 
 # Mapping percent change in rent
 ggplot(data = combined_rent_data) +
@@ -150,7 +153,7 @@ ggplot(data = combined_rent_data) +
   )
 
 # Distribution of change in rent by dollars 
-rent_data_change %>% 
+combined_rent_data %>% 
   ggplot() +
   geom_histogram(
     aes(x = med_rent_change),
@@ -162,7 +165,34 @@ rent_data_change %>%
   ggtitle(label = '', subtitle = '') +
   theme_minimal()
 
-summary(rent_data_change$med_rent_change)
+summary(combined_rent_data$med_rent_change)
+
+# Mapping unit change 
+ggplot(data = combined_rent_data) +
+  geom_sf(aes(fill = rental_unit_change)) +
+  theme_void() +
+  scale_fill_distiller(name = "Unit Change 2010-2019",
+                       palette = "YlGnBu") +
+  ggtitle("Placeholder") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of unit change  
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = rental_unit_change),
+    bins = 100,
+    fill = "blue") +
+  scale_x_continuous(labels = comma_format()) + 
+  xlab('Tract change in units') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$rental_unit_change)
 
 # now working with Jenny Schuetz's permit data
 
