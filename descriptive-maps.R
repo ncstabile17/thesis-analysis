@@ -39,15 +39,15 @@ all_hmda <- read_csv("data/all_hmda.csv") %>%
 all_hmda$census_tract <- str_remove_all(all_hmda$census_tract, "[.]")
 
 # Custom function to get arbitrary ACS data
-make_acs_map <- function(year, census_var, state_fips, county_fips, geometry_flag) {
+make_acs_map <- function(.year, .census_var, .state_fips, .county_fips, .geometry_flag) {
   
   acs_map_data <- get_acs(
     geography = "tract",
-    variables = census_var,
-    state = state_fips,
-    county = county_fips,
-    year = year,
-    geometry = geometry_flag
+    variables = .census_var,
+    state = .state_fips,
+    county = .county_fips,
+    year = .year,
+    geometry = .geometry_flag
   )
   
   acs_map <- ggplot(data = acs_map_data) +
@@ -58,66 +58,93 @@ make_acs_map <- function(year, census_var, state_fips, county_fips, geometry_fla
   
 }
 
-# Getting ACS data on Median Gross Rent for 2010 and 2018 
-rent_2018 <- make_acs_map(2018, "B25064_001", 11, 1, FALSE)
+# Function to rename ACS variables
+rename_clean_acs <- function(.acs_data, .var_name, .moe_name) {
+  
+  cleaned_data <- .acs_data[[1]] %>% 
+    rename(
+      {{.var_name}} := estimate,
+      {{.moe_name}} := moe
+    ) %>% 
+    select(-NAME, -variable)
+  
+  return(cleaned_data)
+  
+}
+
+# Getting ACS data on Median Gross Rent for 2010 and 2019 
+rent_2019 <- make_acs_map(2019, "B25064_001", 11, 1, FALSE)
 rent_2010 <- make_acs_map(2010, "B25064_001", 11, 1, TRUE)
 
-rent_data_2018 <- rent_2018[[1]] %>% 
-  rename(
-    med_rent_2018 = estimate,
-    med_rent_moe_2018 = moe
-  ) %>% 
-  select(-NAME, -variable)
+# Getting data on rental units for 2010 and 2019
+renter_occupied_2010 <- make_acs_map(2010, "B25003_003", 11, 1, FALSE)
+vacant_for_rent_2010 <- make_acs_map(2010, "B25004_002", 11, 1, FALSE)
+rented_not_occupied_2010 <- make_acs_map(2010, "B25004_003", 11, 1, FALSE)
 
-rent_data_2010 <- rent_2010[[1]] %>% 
-  rename(
-    med_rent_2010 = estimate,
-    med_rent_moe_2010 = moe
-  )
+renter_occupied_2019 <- make_acs_map(2019, "B25003_003", 11, 1, FALSE)
+vacant_for_rent_2019 <- make_acs_map(2019, "B25004_002", 11, 1, FALSE)
+rented_not_occupied_2019 <- make_acs_map(2019, "B25004_003", 11, 1, FALSE)
 
-# Calculating and mapping percent change in rent by Census tract
-rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
-  mutate(med_rent_per_change = (med_rent_2018 - med_rent_2010)/med_rent_2010 * 100)
+# Cleaning and renaming ACS variables
+rent_2010 <- rename_clean_acs(rent_2010, med_rent_2010, med_rent_moe_2010)
+rent_2019 <- rename_clean_acs(rent_2019, med_rent_2019, med_rent_moe_2019)
 
-ggplot(data = rent_data_change) +
+renter_occupied_2010 <- rename_clean_acs(renter_occupied_2010, renter_occupied_2010, renter_occupied_moe_2010)
+renter_occupied_2019 <- rename_clean_acs(renter_occupied_2019, renter_occupied_2019, renter_occupied_moe_2019)
+
+vacant_for_rent_2010 <- rename_clean_acs(vacant_for_rent_2010, vacant_for_rent_2010, vacant_for_rent_moe_2010)
+vacant_for_rent_2019 <- rename_clean_acs(vacant_for_rent_2019, vacant_for_rent_2019, vacant_for_rent_moe_2019)
+
+rented_not_occupied_2010 <- rename_clean_acs(rented_not_occupied_2010, rented_not_occupied_2010, rented_not_occupied_moe_2010)
+rented_not_occupied_2019 <- rename_clean_acs(rented_not_occupied_2019, rented_not_occupied_2019, rented_not_occupied_moe_2019)
+
+
+# Combining variables and calculating rent change and percent rent change by Census tract
+# TODO: sum total rental units and calculate change in rental units
+combined_rent_data <- list(rent_2010, rent_2019, 
+               renter_occupied_2010, renter_occupied_2019, 
+               vacant_for_rent_2010, vacant_for_rent_2019,
+               rented_not_occupied_2010, rented_not_occupied_2019) %>% 
+  reduce(left_join, by = "GEOID") %>% 
+  mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
+         rent_change = med_rent_2019 - med_rent_2010)
+
+# Mapping percent change in rent
+ggplot(data = combined_rent_data) +
   geom_sf(aes(fill = med_rent_per_change)) +
   theme_void() +
-  scale_fill_distiller(name = "% Rent Change 2010-2018",
+  scale_fill_distiller(name = "% Rent Change 2010-2019",
                        palette = "YlGnBu") +
   ggtitle("Largest increases in median rent concentrated in few Census tracts") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2019.") +
   theme(
     plot.caption = element_text(hjust = 0)
   )
 
-# Calculating and mapping change in rent by Census tract
-rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
-  mutate(rent_change = med_rent_2018 - med_rent_2010)
-
-# with limit on rent change (to reduce outlier skewing color scheme)
-rent_data_change %>% 
+# Mapping rent change with limit on rent change (to reduce outlier skewing color scheme)
+combined_rent_data %>% 
   mutate(
     med_rent_change = if_else(med_rent_change > 1200, 1200, med_rent_change)) %>% 
   ggplot() +
   geom_sf(aes(fill = med_rent_change)) +
   theme_void() +
-  scale_fill_distiller(name = "Rent Change 2010-2018",
+  scale_fill_distiller(name = "Rent Change 2010-2019",
                        palette = "YlGnBu",
                        limits = c(-150, 1200)) +
   ggtitle("Largest increases in median rent concentrated in few Census tracts") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
     plot.caption = element_text(hjust = 0)
   )
 
-# Without limit on rent change
-ggplot(data = rent_data_change) +
+# Mapping rent change without limit on rent change
+ggplot(data = combined_rent_data) +
   geom_sf(aes(fill = med_rent_change)) +
   theme_void() +
-  scale_fill_distiller(name = "Rent Change 2010-2018",
+  scale_fill_distiller(name = "Rent Change 2010-2019",
                        palette = "YlGnBu") +
   ggtitle("Largest increases in median rent concentrated in few Census tracts") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
     plot.caption = element_text(hjust = 0)
   )
@@ -136,32 +163,6 @@ rent_data_change %>%
   theme_minimal()
 
 summary(rent_data_change$med_rent_change)
-
-# Getting data on rental units for 2010 and 2019
-renter_occupied_2010 <- make_acs_map(2010, "B25003_003", 11, 1, TRUE)
-vacant_for_rent_2010 <- make_acs_map(2010, "B25004_002", 11, 1, TRUE)
-rented_not_occupied_2010 <- make_acs_map(2010, "B25004_003", 11, 1, TRUE)
-
-renter_occupied_2019 <- make_acs_map(2019, "B25003_003", 11, 1, TRUE)
-vacant_for_rent_2019 <- make_acs_map(2019, "B25004_002", 11, 1, TRUE)
-rented_not_occupied_2019 <- make_acs_map(2019, "B25004_003", 11, 1, TRUE)
-
-rental_unit_data_2019 <- rent_2018[[1]] %>% 
-  rename(
-    estimate_2018 = estimate,
-    moe_2018 = moe
-  ) %>% 
-  select(-NAME, -variable)
-
-rent_data_2010 <- rent_2010[[1]] %>% 
-  rename(
-    estimate_2010 = estimate,
-    moe_2010 = moe
-  )
-
-# Calculating and mapping percent change in rent by Census tract
-rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
-  mutate(rent_change = (estimate_2018 - estimate_2010)/estimate_2010 * 100)
 
 # now working with Jenny Schuetz's permit data
 
