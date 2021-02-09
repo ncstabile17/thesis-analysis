@@ -64,6 +64,90 @@ rent_2010 <- make_acs_map(2010, "B25064_001", 11, 1, TRUE)
 
 rent_data_2018 <- rent_2018[[1]] %>% 
   rename(
+    med_rent_2018 = estimate,
+    med_rent_moe_2018 = moe
+  ) %>% 
+  select(-NAME, -variable)
+
+rent_data_2010 <- rent_2010[[1]] %>% 
+  rename(
+    med_rent_2010 = estimate,
+    med_rent_moe_2010 = moe
+  )
+
+# Calculating and mapping percent change in rent by Census tract
+rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
+  mutate(med_rent_per_change = (med_rent_2018 - med_rent_2010)/med_rent_2010 * 100)
+
+ggplot(data = rent_data_change) +
+  geom_sf(aes(fill = med_rent_per_change)) +
+  theme_void() +
+  scale_fill_distiller(name = "% Rent Change 2010-2018",
+                       palette = "YlGnBu") +
+  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Calculating and mapping change in rent by Census tract
+rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
+  mutate(rent_change = med_rent_2018 - med_rent_2010)
+
+# with limit on rent change (to reduce outlier skewing color scheme)
+rent_data_change %>% 
+  mutate(
+    med_rent_change = if_else(med_rent_change > 1200, 1200, med_rent_change)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = med_rent_change)) +
+  theme_void() +
+  scale_fill_distiller(name = "Rent Change 2010-2018",
+                       palette = "YlGnBu",
+                       limits = c(-150, 1200)) +
+  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Without limit on rent change
+ggplot(data = rent_data_change) +
+  geom_sf(aes(fill = med_rent_change)) +
+  theme_void() +
+  scale_fill_distiller(name = "Rent Change 2010-2018",
+                       palette = "YlGnBu") +
+  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of change in rent by dollars 
+rent_data_change %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = med_rent_change),
+    bins = 100,
+    fill = "blue") +
+  scale_x_continuous(labels = dollar_format()) + 
+  xlab('Tract change in median rent') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(rent_data_change$med_rent_change)
+
+# Getting data on rental units for 2010 and 2019
+renter_occupied_2010 <- make_acs_map(2010, "B25003_003", 11, 1, TRUE)
+vacant_for_rent_2010 <- make_acs_map(2010, "B25004_002", 11, 1, TRUE)
+rented_not_occupied_2010 <- make_acs_map(2010, "B25004_003", 11, 1, TRUE)
+
+renter_occupied_2019 <- make_acs_map(2019, "B25003_003", 11, 1, TRUE)
+vacant_for_rent_2019 <- make_acs_map(2019, "B25004_002", 11, 1, TRUE)
+rented_not_occupied_2019 <- make_acs_map(2019, "B25004_003", 11, 1, TRUE)
+
+rental_unit_data_2019 <- rent_2018[[1]] %>% 
+  rename(
     estimate_2018 = estimate,
     moe_2018 = moe
   ) %>% 
@@ -78,64 +162,6 @@ rent_data_2010 <- rent_2010[[1]] %>%
 # Calculating and mapping percent change in rent by Census tract
 rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
   mutate(rent_change = (estimate_2018 - estimate_2010)/estimate_2010 * 100)
-
-ggplot(data = rent_data_change) +
-  geom_sf(aes(fill = rent_change)) +
-  theme_void() +
-  scale_fill_distiller(name = "% Rent Change 2010-2018",
-                       palette = "YlGnBu") +
-  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
-  theme(
-    plot.caption = element_text(hjust = 0)
-  )
-
-# Calculating and mapping change in rent by Census tract
-rent_data_change <- left_join(rent_data_2010, rent_data_2018, by = "GEOID") %>% 
-  mutate(rent_change = estimate_2018 - estimate_2010)
-
-# with limit on rent change (to reduce outlier skewing color scheme)
-rent_data_change %>% 
-  mutate(
-    rent_change = if_else(rent_change > 1200, 1200, rent_change)) %>% 
-  ggplot() +
-  geom_sf(aes(fill = rent_change)) +
-  theme_void() +
-  scale_fill_distiller(name = "Rent Change 2010-2018",
-                       palette = "YlGnBu",
-                       limits = c(-150, 1200)) +
-  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
-  theme(
-    plot.caption = element_text(hjust = 0)
-  )
-
-# Without limit on rent change
-ggplot(data = rent_data_change) +
-  geom_sf(aes(fill = rent_change)) +
-  theme_void() +
-  scale_fill_distiller(name = "Rent Change 2010-2018",
-                       palette = "YlGnBu") +
-  ggtitle("Largest increases in median rent concentrated in few Census tracts") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2014-2018.") +
-  theme(
-    plot.caption = element_text(hjust = 0)
-  )
-
-# Distribution of change in rent by dollars 
-rent_data_change %>% 
-  ggplot() +
-  geom_histogram(
-    aes(x = rent_change),
-    bins = 100,
-    fill = "blue") +
-  scale_x_continuous(labels = dollar_format()) + 
-  xlab('Tract change in median rent') +
-  ylab('Tract count') +
-  ggtitle(label = '', subtitle = '') +
-  theme_minimal()
-
-summary(rent_data_change$rent_change)
 
 # now working with Jenny Schuetz's permit data
 
