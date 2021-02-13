@@ -118,7 +118,7 @@ med_income_2019 <- rename_clean_acs(med_income_2019, med_income_2019, med_income
 med_home_value_2010 <- rename_clean_acs(med_home_value_2010, med_home_value_2010, med_income_moe_2010)
 med_home_value_2019 <- rename_clean_acs(med_home_value_2019, med_home_value_2019, med_income_moe_2019)
 
-# TODO: Get percent low-income cost burdened (B25106_024 and others), affordable units, rent-controlled (?), crime rate
+# TODO: Get affordable units, rent-controlled (?), crime rate
 
 # Getting rent by income data table
 # This table has the population count at different income bands that paid a specific range of rents
@@ -210,6 +210,40 @@ avg_low_inc_rent_2019 <-  rent_by_income_data_2019_wider %>%
             + low_inc_1750*1750 + low_inc_2250*2250)/total_low_inc_2019) %>% 
   select(GEOID, avg_low_inc_rent_2019, total_low_inc_2019)
 
+# Getting total low-income renters that are housing cost-burdened (rent greater than 30% of income)
+low_inc_cost_burden_data_2010 <- get_acs(
+  geography = "tract",
+  table = "B25106",
+  state = 11,
+  county = 1,
+  year = 2010,
+) 
+
+low_inc_cost_burden_data_2010 <- low_inc_cost_burden_data_2010 %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", values_from = "estimate") %>% 
+  mutate(low_inc_cost_burden_2010 = B25106_028 + B25106_032 + B25106_036,
+         total_low_inc_2_2010 = B25106_025 + B25106_029 + B25106_033,
+         per_low_inc_cost_burden_2010 = low_inc_cost_burden_2010/total_low_inc_2_2010) %>% 
+  select(GEOID, low_inc_cost_burden_2010, total_low_inc_2_2010, per_low_inc_cost_burden_2010)
+
+# Getting total low-income renters that are housing cost-burdened (rent greater than 30% of income)
+low_inc_cost_burden_data_2019 <- get_acs(
+  geography = "tract",
+  table = "B25106",
+  state = 11,
+  county = 1,
+  year = 2019,
+) 
+
+low_inc_cost_burden_data_2019 <- low_inc_cost_burden_data_2019 %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", values_from = "estimate") %>% 
+  mutate(low_inc_cost_burden_2019 = B25106_028 + B25106_032 + B25106_036,
+         total_low_inc_2_2019 = B25106_025 + B25106_029 + B25106_033,
+         per_low_inc_cost_burden_2019 = low_inc_cost_burden_2019/total_low_inc_2_2019) %>% 
+  select(GEOID, low_inc_cost_burden_2019, total_low_inc_2_2019, per_low_inc_cost_burden_2019)
+
 # Combining variables and calculating rent change and percent rent change by Census tract
 combined_rent_data <- list(rent_2019, rent_2010, 
                renter_occupied_2010, renter_occupied_2019, 
@@ -219,7 +253,8 @@ combined_rent_data <- list(rent_2019, rent_2010,
                black_pop_2010, black_pop_2019, 
                avg_low_inc_rent_2010, avg_low_inc_rent_2019,
                med_income_2010, med_income_2019,
-               med_home_value_2010, med_home_value_2019) %>% 
+               med_home_value_2010, med_home_value_2019,
+               low_inc_cost_burden_data_2010, low_inc_cost_burden_data_2019) %>% 
   reduce(left_join, by = "GEOID") %>% 
   mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
          med_rent_change = med_rent_2019 - med_rent_2010,
