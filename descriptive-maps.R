@@ -38,6 +38,9 @@ all_hmda <- read_csv("data/all_hmda.csv") %>%
 
 all_hmda$census_tract <- str_remove_all(all_hmda$census_tract, "[.]")
 
+census_vars_2010 <- load_variables(2010, "acs5", cache = TRUE)
+census_vars_2019 <- load_variables(2019, "acs5", cache = TRUE)
+
 # Custom function to get arbitrary ACS data
 get_acs_data <- function(.year, .census_var, .state_fips, .county_fips, .geometry_flag) {
   
@@ -52,8 +55,6 @@ get_acs_data <- function(.year, .census_var, .state_fips, .county_fips, .geometr
   
   return(acs_data)
 }
-
-census_vars <- load_variables(2019, "acs5", cache = TRUE)
 
 # Function to rename ACS variables
 rename_clean_acs <- function(.acs_data, .var_name, .moe_name) {
@@ -107,13 +108,104 @@ total_pop_2019 <- rename_clean_acs(total_pop_2019, total_pop_2019, total_pop_moe
 black_pop_2010 <- rename_clean_acs(black_pop_2010, black_pop_2010, black_pop_moe_2010)
 black_pop_2019 <- rename_clean_acs(black_pop_2019, black_pop_2019, black_pop_moe_2019)
 
+# Getting rent by income data table
+# This table has the population count at different income bands that paid a specific range of rents
+# For example, hh's making under $10,000 who paid between $500 and $600 in rent
+rent_by_income_data_2010 <- get_acs(
+  geography = "tract",
+  table = "B25122",
+  state = 11,
+  county = 1,
+  year = 2010,
+) 
+
+# Pivoting data so each variable estimate is its own column 
+# Summing values across low-income bands to get total low income that paid a particular rent
+# For example, all hh's making under $50,000 that paid between $400 and $500 in rent
+# This will be used to create weighted average rent for low-income hh's
+rent_by_income_data_2010_wider <- rent_by_income_data_2010 %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", values_from = "estimate") %>% 
+  mutate(low_inc_100 = B25122_004 + B25122_021 + B25122_038 + B25122_055,
+         low_inc_150 = B25122_005 + B25122_022 + B25122_039 + B25122_056,
+         low_inc_250 = B25122_006 + B25122_023 + B25122_040 + B25122_057,
+         low_inc_350 = B25122_007 + B25122_024 + B25122_041 + B25122_058,
+         low_inc_450 = B25122_008 + B25122_025 + B25122_042 + B25122_059,
+         low_inc_550 = B25122_009 + B25122_026 + B25122_043 + B25122_060,
+         low_inc_650 = B25122_010 + B25122_027 + B25122_044 + B25122_061,
+         low_inc_750 = B25122_011 + B25122_028 + B25122_045 + B25122_062,
+         low_inc_850 = B25122_012 + B25122_029 + B25122_046 + B25122_063,
+         low_inc_950 = B25122_013 + B25122_030 + B25122_047 + B25122_064,
+         low_inc_1125 = B25122_014 + B25122_031 + B25122_048 + B25122_065,
+         low_inc_1375 = B25122_015 + B25122_032 + B25122_049 + B25122_066,
+         low_inc_1750 = B25122_016 + B25122_033 + B25122_050 + B25122_067,
+         low_inc_2250 = B25122_017 + B25122_034 + B25122_051 + B25122_068,
+         total_low_inc_2010 = low_inc_100 + low_inc_150 + low_inc_250 + low_inc_350 +
+           low_inc_450 + low_inc_550 + low_inc_650 + low_inc_750 + low_inc_850 + 
+           low_inc_950 + low_inc_1125 + low_inc_1375 + low_inc_1750 + low_inc_2250)
+
+# Calculating weighted average low income rent
+avg_low_inc_rent_2010 <-  rent_by_income_data_2010_wider %>% 
+  mutate(avg_low_inc_rent_2010 = 
+           (low_inc_100*100 + low_inc_150*150 + low_inc_250*250 + low_inc_350*350
+            + low_inc_450*450 + low_inc_550*550 + low_inc_650*650 + low_inc_750*750
+            + low_inc_850*850 + low_inc_950*950 + low_inc_1125*1125 + low_inc_1375*1375
+            + low_inc_1750*1750 + low_inc_2250*2250)/total_low_inc_2010) %>% 
+  select(GEOID, avg_low_inc_rent_2010, total_low_inc_2010)
+
+# Getting rent by income data table
+# This table has the population count at different income bands that paid a specific range of rents
+# For example, hh's making under $10,000 who paid between $500 and $600 in rent
+rent_by_income_data_2019 <- get_acs(
+  geography = "tract",
+  table = "B25122",
+  state = 11,
+  county = 1,
+  year = 2019,
+) 
+
+# Pivoting data so each variable estimate is its own column 
+# Summing values across low-income bands to get total low income that paid a particular rent
+# For example, all hh's making under $50,000 that paid between $400 and $500 in rent
+# This will be used to create weighted average rent for low-income hh's
+rent_by_income_data_2019_wider <- rent_by_income_data_2019 %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", values_from = "estimate") %>% 
+  mutate(low_inc_100 = B25122_004 + B25122_021 + B25122_038 + B25122_055,
+         low_inc_150 = B25122_005 + B25122_022 + B25122_039 + B25122_056,
+         low_inc_250 = B25122_006 + B25122_023 + B25122_040 + B25122_057,
+         low_inc_350 = B25122_007 + B25122_024 + B25122_041 + B25122_058,
+         low_inc_450 = B25122_008 + B25122_025 + B25122_042 + B25122_059,
+         low_inc_550 = B25122_009 + B25122_026 + B25122_043 + B25122_060,
+         low_inc_650 = B25122_010 + B25122_027 + B25122_044 + B25122_061,
+         low_inc_750 = B25122_011 + B25122_028 + B25122_045 + B25122_062,
+         low_inc_850 = B25122_012 + B25122_029 + B25122_046 + B25122_063,
+         low_inc_950 = B25122_013 + B25122_030 + B25122_047 + B25122_064,
+         low_inc_1125 = B25122_014 + B25122_031 + B25122_048 + B25122_065,
+         low_inc_1375 = B25122_015 + B25122_032 + B25122_049 + B25122_066,
+         low_inc_1750 = B25122_016 + B25122_033 + B25122_050 + B25122_067,
+         low_inc_2250 = B25122_017 + B25122_034 + B25122_051 + B25122_068,
+         total_low_inc_2019 = low_inc_100 + low_inc_150 + low_inc_250 + low_inc_350 +
+           low_inc_450 + low_inc_550 + low_inc_650 + low_inc_750 + low_inc_850 + 
+           low_inc_950 + low_inc_1125 + low_inc_1375 + low_inc_1750 + low_inc_2250)
+
+# Calculating weighted average low income rent
+avg_low_inc_rent_2019 <-  rent_by_income_data_2019_wider %>% 
+  mutate(avg_low_inc_rent_2019 = 
+           (low_inc_100*100 + low_inc_150*150 + low_inc_250*250 + low_inc_350*350
+            + low_inc_450*450 + low_inc_550*550 + low_inc_650*650 + low_inc_750*750
+            + low_inc_850*850 + low_inc_950*950 + low_inc_1125*1125 + low_inc_1375*1375
+            + low_inc_1750*1750 + low_inc_2250*2250)/total_low_inc_2019) %>% 
+  select(GEOID, avg_low_inc_rent_2019, total_low_inc_2019)
+
 # Combining variables and calculating rent change and percent rent change by Census tract
 combined_rent_data <- list(rent_2019, rent_2010, 
                renter_occupied_2010, renter_occupied_2019, 
                vacant_for_rent_2010, vacant_for_rent_2019,
                rented_not_occupied_2010, rented_not_occupied_2019, 
                total_pop_2010, total_pop_2019, 
-               black_pop_2010, black_pop_2019) %>% 
+               black_pop_2010, black_pop_2019, 
+               avg_low_inc_rent_2010, avg_low_inc_rent_2019) %>% 
   reduce(left_join, by = "GEOID") %>% 
   mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
          med_rent_change = med_rent_2019 - med_rent_2010,
@@ -122,7 +214,9 @@ combined_rent_data <- list(rent_2019, rent_2010,
          rental_unit_change = all_rental_units_2019 - all_rental_units_2010,
          per_black_pop_2010 = black_pop_2010/total_pop_2010,
          per_black_pop_2019 = black_pop_2019/total_pop_2019,
-         black_pop_change = black_pop_2019 - black_pop_2010)
+         black_pop_change = black_pop_2019 - black_pop_2010,
+         low_inc_rent_change = avg_low_inc_rent_2019 - avg_low_inc_rent_2010,
+         low_inc_pop_change = total_low_inc_2019 - total_low_inc_2010)
 
 # Mapping percent change in rent
 ggplot(data = combined_rent_data) +
