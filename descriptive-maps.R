@@ -85,9 +85,13 @@ rented_not_occupied_2019 <- get_acs_data(2019, "B25004_003", 11, 1, FALSE)
 # Other demographic data 
 total_pop_2010 <- get_acs_data(2010, "B01003_001", 11, 1, FALSE)
 black_pop_2010 <- get_acs_data(2010, "B03002_004", 11, 1, FALSE)
+med_income_2010 <- get_acs_data(2010, "B03002_004", 11, 1, FALSE)
+med_home_value_2010 <- get_acs_data(2010, "B25077_001", 11, 1, FALSE)
 
 total_pop_2019 <- get_acs_data(2019, "B01003_001", 11, 1, FALSE)
 black_pop_2019 <- get_acs_data(2019, "B03002_004", 11, 1, FALSE)
+med_income_2019 <- get_acs_data(2019, "B01003_001", 11, 1, FALSE)
+med_home_value_2019 <- get_acs_data(2019, "B25077_001", 11, 1, FALSE)
 
 # Cleaning and renaming ACS variables
 rent_2010 <- rename_clean_acs(rent_2010, med_rent_2010, med_rent_moe_2010)
@@ -107,6 +111,14 @@ total_pop_2019 <- rename_clean_acs(total_pop_2019, total_pop_2019, total_pop_moe
 
 black_pop_2010 <- rename_clean_acs(black_pop_2010, black_pop_2010, black_pop_moe_2010)
 black_pop_2019 <- rename_clean_acs(black_pop_2019, black_pop_2019, black_pop_moe_2019)
+
+med_income_2010 <- rename_clean_acs(med_income_2010, med_income_2010, med_income_moe_2010)
+med_income_2019 <- rename_clean_acs(med_income_2019, med_income_2019, med_income_moe_2019)
+
+med_home_value_2010 <- rename_clean_acs(med_home_value_2010, med_home_value_2010, med_income_moe_2010)
+med_home_value_2019 <- rename_clean_acs(med_home_value_2019, med_home_value_2019, med_income_moe_2019)
+
+# TODO: Get percent low-income cost burdened (B25106_024 and others), affordable units, rent-controlled (?), crime rate
 
 # Getting rent by income data table
 # This table has the population count at different income bands that paid a specific range of rents
@@ -205,7 +217,9 @@ combined_rent_data <- list(rent_2019, rent_2010,
                rented_not_occupied_2010, rented_not_occupied_2019, 
                total_pop_2010, total_pop_2019, 
                black_pop_2010, black_pop_2019, 
-               avg_low_inc_rent_2010, avg_low_inc_rent_2019) %>% 
+               avg_low_inc_rent_2010, avg_low_inc_rent_2019,
+               med_income_2010, med_income_2019,
+               med_home_value_2010, med_home_value_2019) %>% 
   reduce(left_join, by = "GEOID") %>% 
   mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
          med_rent_change = med_rent_2019 - med_rent_2010,
@@ -218,7 +232,7 @@ combined_rent_data <- list(rent_2019, rent_2010,
          low_inc_rent_change = avg_low_inc_rent_2019 - avg_low_inc_rent_2010,
          low_inc_pop_change = total_low_inc_2019 - total_low_inc_2010)
 
-# Mapping percent change in rent
+# Mapping percent change in median rent
 ggplot(data = combined_rent_data) +
   geom_sf(aes(fill = med_rent_per_change)) +
   theme_void() +
@@ -230,7 +244,7 @@ ggplot(data = combined_rent_data) +
     plot.caption = element_text(hjust = 0)
   )
 
-# Mapping rent change with limit on rent change (to reduce outlier skewing color scheme)
+# Mapping median rent change with limit on rent change (to reduce outlier skewing color scheme)
 combined_rent_data %>% 
   mutate(
     med_rent_change = if_else(med_rent_change > 1200, 1200, med_rent_change),
@@ -246,7 +260,7 @@ combined_rent_data %>%
     plot.caption = element_text(hjust = 0)
   )
 
-# Mapping rent change without limit on rent change
+# Mapping median rent change without limit on rent change
 ggplot(data = combined_rent_data) +
   geom_sf(aes(fill = med_rent_change)) +
   theme_void() +
@@ -258,7 +272,7 @@ ggplot(data = combined_rent_data) +
     plot.caption = element_text(hjust = 0)
   )
 
-# Distribution of change in rent by dollars 
+# Distribution of change in median rent by dollars 
 combined_rent_data %>% 
   ggplot() +
   geom_histogram(
@@ -271,7 +285,7 @@ combined_rent_data %>%
   ggtitle(label = '', subtitle = '') +
   theme_minimal()
 
-# Distribution of change in rent for tracts with decreasing black population 
+# Distribution of change in median rent for tracts with decreasing black population 
 combined_rent_data %>% 
   filter(black_pop_change < 0) %>% 
   ggplot() +
@@ -285,7 +299,7 @@ combined_rent_data %>%
   ggtitle(label = '', subtitle = '') +
   theme_minimal()
 
-# Distribution of change in rent for tracts with increasing black population 
+# Distribution of change in median rent for tracts with increasing black population 
 combined_rent_data %>% 
   filter(black_pop_change > 0) %>% 
   ggplot() +
@@ -300,6 +314,33 @@ combined_rent_data %>%
   theme_minimal()
 
 summary(combined_rent_data$med_rent_change)
+
+# Mapping avg low-inc rent change without limit on rent change
+ggplot(data = combined_rent_data) +
+  geom_sf(aes(fill = low_inc_rent_change)) +
+  theme_void() +
+  scale_fill_distiller(name = "Low-inc Rent Change 2010-2019",
+                       palette = "YlGnBu") +
+  ggtitle("Placeholder") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of change in avg low-inc rent by dollars 
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = low_inc_rent_change),
+    bins = 100,
+    fill = "blue") +
+  scale_x_continuous(labels = dollar_format()) + 
+  xlab('Tract change in avg low-inc rent') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$low_inc_rent_change)
 
 # Mapping unit change with limit to remove outliers
 combined_rent_data %>% 
@@ -400,6 +441,10 @@ combined_rent_data %>%
   theme_minimal()
 
 summary(combined_rent_data$black_pop_change)
+
+# TODO: Make scatter plots to examine relationships of all these variables
+# TODO: Where did housing units get added? What did those look like in 2010 (in terms of race and income)
+# TODO: Where did rent increase (the most)? What did those look like in 2010 (in terms of race and income)
 
 # now working with Jenny Schuetz's permit data
 
