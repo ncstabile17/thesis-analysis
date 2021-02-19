@@ -19,18 +19,18 @@ library(scales)
 # census_api_key(census_key, install = TRUE, overwrite = TRUE)
 
 # reading in permits data
-all_new_building_permits <- read_csv("data/all_new_building_permits.csv") %>% 
+# all_new_building_permits <- read_csv("data/all_new_building_permits.csv") %>% 
   mutate(address_id = as.character(maraddressrepositoryid)) 
 
 # reading in DC Census tract shape files
-dc_tracts_2010 <- st_read("data/Census_Tracts_in_2010.shp") %>% 
-  select(census_tract = TRACT, GEOID, geometry)
+# dc_tracts_2010 <- st_read("data/Census_Tracts_in_2010.shp") %>% 
+#  select(census_tract = TRACT, GEOID, geometry)
 
 # reading in permits data from Jenny Schuetz
-schuetz_permits <- read_csv("data/tract_permits-GEOID.csv") %>% 
-  mutate(GEOID = as.character(GEOID)) %>% 
-  rename(new_permits = 'Permits, new construction',
-         new_units = 'Units permitted')
+ # schuetz_permits <- read_csv("data/tract_permits-GEOID.csv") %>% 
+ # mutate(GEOID = as.character(GEOID)) %>% 
+ # rename(new_permits = 'Permits, new construction',
+#         new_units = 'Units permitted')
 
 # reading in HMDA data
 all_hmda <- read_csv("data/all_hmda.csv") %>% 
@@ -38,11 +38,20 @@ all_hmda <- read_csv("data/all_hmda.csv") %>%
 
 all_hmda$census_tract <- str_remove_all(all_hmda$census_tract, "[.]")
 
+# TODO: Figure out which subsidized unit data to use, they might be the same but 
+# it also looks like most recent in Housing Insights is from 2011,
+# maybe combine with Open Data or just use Open Data, would have to remove doubles if combining
+
+# Reading in subsidized affordable housing data from Housing Insights database
+affordable_units_data <- read_csv("data/affordable_units.csv") %>% 
+  rename()
+
 census_vars_2010 <- load_variables(2010, "acs5", cache = TRUE)
 census_vars_2019 <- load_variables(2019, "acs5", cache = TRUE)
 
+# TODO: Rewrite all this code so I just loop through and combine all the variables given an arbitrary list
 # Custom function to get arbitrary ACS data
-get_acs_data <- function(.year, .census_var, .state_fips, .county_fips, .geometry_flag) {
+get_acs_data <- function(.year, .census_var, .state_fips, .county_fips, .geometry_flag = FALSE) {
   
   acs_data <- get_acs(
     geography = "tract",
@@ -85,12 +94,12 @@ rented_not_occupied_2019 <- get_acs_data(2019, "B25004_003", 11, 1, FALSE)
 # Other demographic data 
 total_pop_2010 <- get_acs_data(2010, "B01003_001", 11, 1, FALSE)
 black_pop_2010 <- get_acs_data(2010, "B03002_004", 11, 1, FALSE)
-med_income_2010 <- get_acs_data(2010, "B03002_004", 11, 1, FALSE)
+med_income_2010 <- get_acs_data(2010, "B19013_001", 11, 1, FALSE)
 med_home_value_2010 <- get_acs_data(2010, "B25077_001", 11, 1, FALSE)
 
 total_pop_2019 <- get_acs_data(2019, "B01003_001", 11, 1, FALSE)
 black_pop_2019 <- get_acs_data(2019, "B03002_004", 11, 1, FALSE)
-med_income_2019 <- get_acs_data(2019, "B01003_001", 11, 1, FALSE)
+med_income_2019 <- get_acs_data(2019, "B19013_001", 11, 1, FALSE)
 med_home_value_2019 <- get_acs_data(2019, "B25077_001", 11, 1, FALSE)
 
 # Cleaning and renaming ACS variables
@@ -128,7 +137,7 @@ rent_by_income_data_2010 <- get_acs(
   table = "B25122",
   state = 11,
   county = 1,
-  year = 2010,
+  year = 2010
 ) 
 
 # Pivoting data so each variable estimate is its own column 
@@ -173,7 +182,7 @@ rent_by_income_data_2019 <- get_acs(
   table = "B25122",
   state = 11,
   county = 1,
-  year = 2019,
+  year = 2019
 ) 
 
 # Pivoting data so each variable estimate is its own column 
@@ -216,7 +225,7 @@ low_inc_cost_burden_data_2010 <- get_acs(
   table = "B25106",
   state = 11,
   county = 1,
-  year = 2010,
+  year = 2010
 ) 
 
 low_inc_cost_burden_data_2010 <- low_inc_cost_burden_data_2010 %>% 
@@ -233,7 +242,7 @@ low_inc_cost_burden_data_2019 <- get_acs(
   table = "B25106",
   state = 11,
   county = 1,
-  year = 2019,
+  year = 2019
 ) 
 
 low_inc_cost_burden_data_2019 <- low_inc_cost_burden_data_2019 %>% 
@@ -243,6 +252,38 @@ low_inc_cost_burden_data_2019 <- low_inc_cost_burden_data_2019 %>%
          total_low_inc_2_2019 = B25106_025 + B25106_029 + B25106_033,
          per_low_inc_cost_burden_2019 = low_inc_cost_burden_2019/total_low_inc_2_2019) %>% 
   select(GEOID, low_inc_cost_burden_2019, total_low_inc_2_2019, per_low_inc_cost_burden_2019)
+
+# Getting rent-controlled units by combining variables for Tenure By Year Structure Built By Units In Structure
+# Only getting renter-occupied pre-1979 buildings with 5+ units; not exactly rent control, but close
+rent_control_data_2010 <- get_acs(
+  geography = "tract",
+  table = "B25127",
+  state = 11,
+  county = 1,
+  year = 2010
+) 
+
+rent_control_2010 <- rent_control_data_2010 %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", values_from = "estimate") %>% 
+  mutate(rent_control_2010 = B25127_049 + B25127_050 + B25127_051) %>% 
+  select(GEOID, rent_control_2010)
+
+# Getting rent-controlled units by combining variables for Tenure By Year Structure Built By Units In Structure
+# Only getting renter-occupied pre-1979 buildings with 5+ units; not exactly rent control, but close
+rent_control_data_2019 <- get_acs(
+  geography = "tract",
+  table = "B25127",
+  state = 11,
+  county = 1,
+  year = 2019
+) 
+
+rent_control_2019 <- rent_control_data_2019 %>% 
+  select(-moe) %>% 
+  pivot_wider(names_from = "variable", values_from = "estimate") %>% 
+  mutate(rent_control_2019 = B25127_049 + B25127_050 + B25127_051) %>% 
+  select(GEOID, rent_control_2019)
 
 # Combining variables and calculating rent change and percent rent change by Census tract
 combined_rent_data <- list(rent_2019, rent_2010, 
@@ -254,7 +295,8 @@ combined_rent_data <- list(rent_2019, rent_2010,
                avg_low_inc_rent_2010, avg_low_inc_rent_2019,
                med_income_2010, med_income_2019,
                med_home_value_2010, med_home_value_2019,
-               low_inc_cost_burden_data_2010, low_inc_cost_burden_data_2019) %>% 
+               low_inc_cost_burden_data_2010, low_inc_cost_burden_data_2019,
+               rent_control_2010, rent_control_2019) %>% 
   reduce(left_join, by = "GEOID") %>% 
   mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
          med_rent_change = med_rent_2019 - med_rent_2010,
@@ -480,6 +522,57 @@ summary(combined_rent_data$black_pop_change)
 # TODO: Make scatter plots to examine relationships of all these variables
 # TODO: Where did housing units get added? What did those look like in 2010 (in terms of race and income)
 # TODO: Where did rent increase (the most)? What did those look like in 2010 (in terms of race and income)
+
+# Change in rent by median income in 2010
+combined_rent_data %>% 
+  mutate(maj_black_2010 = if_else(per_black_pop_2010 > .50, 1, 0)) %>% 
+  ggplot(aes(x = med_income_2010, 
+             y = med_rent_change)) + 
+  geom_point(aes(color = as.character(maj_black_2010))) +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_minimal()
+
+# Change in units by median income in 2010
+combined_rent_data %>% 
+  mutate(maj_black_2010 = if_else(per_black_pop_2010 > .50, 1, 0)) %>% 
+  ggplot(aes(x = med_income_2010, 
+             y = rental_unit_change)) + 
+  geom_point(aes(color = as.character(maj_black_2010))) +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_minimal()
+
+# Change in rent by change in units
+combined_rent_data %>% 
+  mutate(maj_black_2010 = if_else(per_black_pop_2010 > .50, 1, 0)) %>% 
+  ggplot(aes(x = med_rent_change, 
+             y = rental_unit_change)) + 
+  geom_point(aes(color = as.character(maj_black_2010))) +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_minimal()
+
+# Change in rent by change in black population
+combined_rent_data %>% 
+  ggplot(aes(x = med_rent_change, 
+             y = black_pop_change)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_minimal()
+
+# Change in rent by change in low-income population
+combined_rent_data %>% 
+  ggplot(aes(x = med_rent_change, 
+             y = low_inc_pop_change)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_minimal()
+
+# Change in rental units by change in low-income population
+combined_rent_data %>% 
+  ggplot(aes(x = rental_unit_change, 
+             y = low_inc_pop_change)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  theme_minimal()
 
 # now working with Jenny Schuetz's permit data
 
