@@ -9,6 +9,7 @@ library(httr)
 library(jsonlite)
 library(RColorBrewer)
 library(scales)
+library(naniar)
 
 # I want to get some Census data so I can make some maps to look at how things have changed 
 # and get a sense of some of my key variables
@@ -18,19 +19,6 @@ library(scales)
 
 # census_api_key(census_key, install = TRUE, overwrite = TRUE)
 
-# reading in permits data
-# all_new_building_permits <- read_csv("data/all_new_building_permits.csv") %>% 
-  mutate(address_id = as.character(maraddressrepositoryid)) 
-
-# reading in DC Census tract shape files
-# dc_tracts_2010 <- st_read("data/Census_Tracts_in_2010.shp") %>% 
-#  select(census_tract = TRACT, GEOID, geometry)
-
-# reading in permits data from Jenny Schuetz
- # schuetz_permits <- read_csv("data/tract_permits-GEOID.csv") %>% 
- # mutate(GEOID = as.character(GEOID)) %>% 
- # rename(new_permits = 'Permits, new construction',
-#         new_units = 'Units permitted')
 
 # reading in HMDA data
 all_hmda <- read_csv("data/all_hmda.csv") %>% 
@@ -43,8 +31,14 @@ all_hmda$census_tract <- str_remove_all(all_hmda$census_tract, "[.]")
 # maybe combine with Open Data or just use Open Data, would have to remove doubles if combining
 
 # Reading in subsidized affordable housing data from Housing Insights database
-affordable_units_data <- read_csv("data/affordable_units.csv") %>% 
-  rename()
+affordable_units_data <- read_csv("data/affordable-projects.csv") %>% 
+  rename(GEOID = zone_census_tract,
+         affordable_units = proj_units_assist_max) %>% 
+  mutate(affordable_units = replace_na(affordable_units, 0),
+         GEOID = as.character(GEOID)) %>% 
+  select(GEOID, affordable_units) %>% 
+  group_by(GEOID) %>% 
+  summarize(total_affordable = sum(affordable_units))
 
 census_vars_2010 <- load_variables(2010, "acs5", cache = TRUE)
 census_vars_2019 <- load_variables(2019, "acs5", cache = TRUE)
@@ -127,7 +121,7 @@ med_income_2019 <- rename_clean_acs(med_income_2019, med_income_2019, med_income
 med_home_value_2010 <- rename_clean_acs(med_home_value_2010, med_home_value_2010, med_income_moe_2010)
 med_home_value_2019 <- rename_clean_acs(med_home_value_2019, med_home_value_2019, med_income_moe_2019)
 
-# TODO: Get affordable units, rent-controlled (?), crime rate
+# TODO: Get crime rate
 
 # Getting rent by income data table
 # This table has the population count at different income bands that paid a specific range of rents
@@ -296,7 +290,8 @@ combined_rent_data <- list(rent_2019, rent_2010,
                med_income_2010, med_income_2019,
                med_home_value_2010, med_home_value_2019,
                low_inc_cost_burden_data_2010, low_inc_cost_burden_data_2019,
-               rent_control_2010, rent_control_2019) %>% 
+               rent_control_2010, rent_control_2019,
+               affordable_units_data) %>% 
   reduce(left_join, by = "GEOID") %>% 
   mutate(med_rent_per_change = (med_rent_2019 - med_rent_2010)/med_rent_2010 * 100,
          med_rent_change = med_rent_2019 - med_rent_2010,
@@ -307,7 +302,35 @@ combined_rent_data <- list(rent_2019, rent_2010,
          per_black_pop_2019 = black_pop_2019/total_pop_2019,
          black_pop_change = black_pop_2019 - black_pop_2010,
          low_inc_rent_change = avg_low_inc_rent_2019 - avg_low_inc_rent_2010,
-         low_inc_pop_change = total_low_inc_2019 - total_low_inc_2010)
+         low_inc_pop_change = total_low_inc_2019 - total_low_inc_2010,
+         total_affordable = replace_na(total_affordable, 0))
+
+# Mapping subsidized affordable units
+combined_rent_data %>% 
+  replace_with_na(replace = list(total_affordable = 0)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = total_affordable)) +
+  theme_void() +
+  scale_fill_distiller(name = "",
+                       palette = "YlGnBu") +
+  ggtitle("Subsidized Affordable") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of tracts with subsidized units
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = total_affordable),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract subsidized units') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
 
 # Mapping percent change in median rent
 ggplot(data = combined_rent_data) +
@@ -329,8 +352,7 @@ combined_rent_data %>%
   ggplot() +
   geom_sf(aes(fill = med_rent_change)) +
   theme_void() +
-  scale_fill_distiller(name = "Rent Change 2010-2019",
-                       palette = "YlGnBu") +
+  scale_fill_viridis_c(name = "Rent Change 2010-2019") +
   ggtitle("Largest increases in median rent concentrated in few Census tracts") +
   labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
@@ -341,8 +363,7 @@ combined_rent_data %>%
 ggplot(data = combined_rent_data) +
   geom_sf(aes(fill = med_rent_change)) +
   theme_void() +
-  scale_fill_distiller(name = "Rent Change 2010-2019",
-                       palette = "YlGnBu") +
+  scale_fill_viridis_c(name = "Rent Change 2010-2019") +
   ggtitle("Largest increases in median rent concentrated in few Census tracts") +
   labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
@@ -422,13 +443,12 @@ summary(combined_rent_data$low_inc_rent_change)
 # Mapping unit change with limit to remove outliers
 combined_rent_data %>% 
   mutate(
-    rental_unit_change = if_else(rental_unit_change > 700, 700, rental_unit_change),
+    rental_unit_change = if_else(rental_unit_change > 1000, 1000, rental_unit_change),
     rental_unit_change = if_else(rental_unit_change < -300, -300, rental_unit_change)) %>% 
   ggplot() +
-  geom_sf() +
+  geom_sf(aes(fill = rental_unit_change)) +
   theme_void() +
-  scale_fill_distiller(name = "Unit Change 2010-2019",
-                       palette = "YlGnBu") +
+  scale_fill_viridis_c(name = "Unit Change 2010-2019") +
   ggtitle("Placeholder") +
   labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
@@ -573,64 +593,6 @@ combined_rent_data %>%
   geom_point() +
   geom_smooth(method = "lm", se=FALSE) +
   theme_minimal()
-
-# now working with Jenny Schuetz's permit data
-
-# adding permit data to rent data
-rent_data_change <- left_join(
-  rent_data_change,
-  schuetz_permits, 
-)
-
-ggplot(data = rent_data_change) +
-  geom_sf(aes(fill = new_units)) +
-  theme_void() + 
-  scale_fill_distiller(name = "New Units 2008-2016",
-                       palette = "YlGnBu",
-                       labels = comma) +
-  ggtitle("New housing units highly concentrated in few Census tracts") +
-  labs(caption = str_wrap("Source: Data compiled by and used with permission from Jenny Schuetz of the Brookings Institution. For data collection details, see Schuetz, J. (2019). Teardowns, popups, and renovations: How does housing supply change? Journal of Regional Science, 60(3), 459-480. doi:10.1111/jors.12470.", 100)) +
-  theme(
-    plot.caption = element_text(hjust = 0)
-  )
-
-
-# now working with the permits data from DC Open Data
-
-all_new_building_permits <- st_as_sf(
-  all_new_building_permits,
-  coords = c("longitude", "latitude"),
-  crs = 4326,
-  remove = FALSE)
-
-# Permit data doesn't have tract or geoID information, adding additional data source
-dc_addresses <- st_read("data/Address_Points.csv") %>% 
-  select(address_id = ADDRESS_ID, census_tract = CENSUS_TRACT)
-
-all_new_building_permits <- 
-  left_join(all_new_building_permits, dc_addresses, by = "address_id")
-
-all_new_permits_merged <- st_join(
-  all_new_building_permits, # points
-  dc_tracts_2010, # polygons
-  join = st_within
-)
-
-all_new_permits_merged <- st_set_geometry(all_new_permits_merged, NULL)
-
-all_new_permits_by_tract <- all_new_permits_merged %>%
-  group_by(GEOID) %>%
-  summarize(
-    permit_count = n(),
-  )
-
-all_new_permits_by_tract <- dc_tracts_2010 %>%
-  left_join(all_new_permits_by_tract, by = "GEOID")
-
-# TODO: something looks wrong here, but maybe not?
-# ggplot(data = all_new_permits_by_tract) +
-#   geom_sf(aes(fill = permit_count)) +
-#   theme_void()
 
 # Working with HMDA data
 
