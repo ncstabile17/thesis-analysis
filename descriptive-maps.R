@@ -10,6 +10,8 @@ library(jsonlite)
 library(RColorBrewer)
 library(scales)
 library(naniar)
+library(ggalt)
+library(ggpubr)
 
 # I want to get some Census data so I can make some maps to look at how things have changed 
 # and get a sense of some of my key variables
@@ -260,7 +262,8 @@ rent_control_data_2010 <- get_acs(
 rent_control_2010 <- rent_control_data_2010 %>% 
   select(-moe) %>% 
   pivot_wider(names_from = "variable", values_from = "estimate") %>% 
-  mutate(rent_control_2010 = B25127_049 + B25127_050 + B25127_051) %>% 
+  mutate(rent_control_2010 = B25127_056 + B25127_057 + B25127_058 + B25127_063 + 
+           B25127_064 + B25127_065 + B25127_070 + B25127_071 + B25127_072) %>% 
   select(GEOID, rent_control_2010)
 
 # Getting rent-controlled units by combining variables for Tenure By Year Structure Built By Units In Structure
@@ -276,7 +279,8 @@ rent_control_data_2019 <- get_acs(
 rent_control_2019 <- rent_control_data_2019 %>% 
   select(-moe) %>% 
   pivot_wider(names_from = "variable", values_from = "estimate") %>% 
-  mutate(rent_control_2019 = B25127_049 + B25127_050 + B25127_051) %>% 
+  mutate(rent_control_2019 = B25127_070 + B25127_071 + B25127_072 + B25127_077 +
+           B25127_078 + B25127_079 + B25127_084 + B25127_085 + B25127_086) %>% 
   select(GEOID, rent_control_2019)
 
 # Combining variables and calculating rent change and percent rent change by Census tract
@@ -305,21 +309,192 @@ combined_rent_data <- list(rent_2019, rent_2010,
          low_inc_pop_change = total_low_inc_2019 - total_low_inc_2010,
          total_affordable = replace_na(total_affordable, 0))
 
-# Mapping subsidized affordable units
+# Maps of all variables 
+
+make_map <- function(.var_name) {
+  
+ combined_rent_data %>% 
+    ggplot() +
+    geom_sf(aes(fill = .var_name)) +
+    theme_void() +
+    scale_fill_viridis_c(name = .var_name) +
+    ggtitle(.var_name) +
+    labs(caption = .var_name) +
+    theme(
+      plot.caption = element_text(hjust = 0)
+    )
+  
+
+}
+
+# med_rent_2019, avg_low_inc_rent_2019, per_low_inc_cost_burden_2019, rental_unit_change,  
+# all_rental_units_2019, total_affordable, med_income_2019, per_black_pop_2019, rent_control_2019,
+# med_home_value_2019, med_rent_2010, avg_low_inc_rent_2010, per_low_inc_cost_burden_2010
+
+# Mapping and getting distribution of all variables
+
+# Mapping med_rent_2019
 combined_rent_data %>% 
-  replace_with_na(replace = list(total_affordable = 0)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = med_rent_2019)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Median Rent 2019",
+                       breaks = c(1000, 1500, 2000, 2500)) +
+  ggtitle("Median Rent 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of med_rent_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = med_rent_2019),
+    bins = 50,
+    fill = "blue") +
+  xlab('Tract median rent') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$med_rent_2019)
+
+# Mapping avg_low_inc_rent_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = avg_low_inc_rent_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Average Low-income Rent 2019") +
+  ggtitle("Average Low-income Rent 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of avg_low_inc_rent_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = avg_low_inc_rent_2019),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract average low-income rent') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$avg_low_inc_rent_2019)
+
+# Mapping per_low_inc_cost_burden_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = per_low_inc_cost_burden_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Percent Low-income cost-burdened 2019") +
+  ggtitle("Percent Low-income renters cost-burdened 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of per_low_inc_cost_burden_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = per_low_inc_cost_burden_2019),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract Percent Low-income renters cost-burdened 2019') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$per_low_inc_cost_burden_2019)
+
+# Mapping rental_unit_change with limit to remove outliers
+combined_rent_data %>% 
+  mutate(
+    rental_unit_change = if_else(rental_unit_change > 1000, 1000, rental_unit_change),
+    rental_unit_change = if_else(rental_unit_change < -300, -300, rental_unit_change)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = rental_unit_change)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Unit Change 2010-2019") +
+  ggtitle("Placeholder") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Mapping rental_unit_change with limit to remove outliers
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = rental_unit_change)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Unit Change 2010-2019") +
+  ggtitle("Placeholder") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of unit change  
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = rental_unit_change),
+    bins = 50,
+    fill = "blue") +
+  scale_x_continuous(labels = comma_format()) + 
+  xlab('Tract change in units') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$rental_unit_change)
+
+# Mapping all_rental_units_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = all_rental_units_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "All Rental Units 2019") +
+  ggtitle("All Rental Units 2019") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2015-2019.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of all_rental_units_2019  
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = all_rental_units_2019),
+    bins = 100,
+    fill = "blue") +
+  scale_x_continuous(labels = comma_format()) + 
+  xlab('Tract units in 2019') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$all_rental_units_2019)
+
+# Mapping total_affordable
+combined_rent_data %>% 
   ggplot() +
   geom_sf(aes(fill = total_affordable)) +
   theme_void() +
-  scale_fill_distiller(name = "",
-                       palette = "YlGnBu") +
+  scale_fill_viridis_b(name = "Subsidized affordable units",
+                       breaks = c(100, 250, 500, 1000, 1500)) +
   ggtitle("Subsidized Affordable") +
   labs(caption = "") +
   theme(
     plot.caption = element_text(hjust = 0)
   )
 
-# Distribution of tracts with subsidized units
+# Distribution of total_affordable
 combined_rent_data %>% 
   ggplot() +
   geom_histogram(
@@ -331,6 +506,354 @@ combined_rent_data %>%
   ggtitle(label = '', subtitle = '') +
   theme_minimal()
 
+summary(combined_rent_data$total_affordable)
+
+# Mapping med_income_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = med_income_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Median Income 2019") +
+  ggtitle("Median Income 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of med_income_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = med_income_2019),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract median income 2019') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$med_income_2019)
+
+# Mapping per_black_pop_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = per_black_pop_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Percent Black population 2019") +
+  ggtitle("Percent Black population 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of per_black_pop_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = per_black_pop_2019),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract percent Black population 2019') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$per_black_pop_2019)
+
+# Mapping rent_control_2019 with limit on outlier
+combined_rent_data %>% 
+  mutate(
+    rent_control_2019 = if_else(rent_control_2019 > 2000, 2000, rent_control_2019)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = rent_control_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Rent Control Units 2019") +
+  ggtitle("Rent Control Units 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of rent_control_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = rent_control_2019),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract Rent Control Units 2019') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$rent_control_2019)
+
+# Mapping med_home_value_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = med_home_value_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Median Home Value 2019") +
+  ggtitle("Median Home Value 2019") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of med_home_value_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = med_home_value_2019),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract Median Home Value 2019') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$med_home_value_2019)
+
+# Mapping med_rent_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = med_rent_2010)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Median Rent 2010") +
+  ggtitle("Median Rent 2010") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of med_rent_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = med_rent_2010),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract Median Rent 2010') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$med_rent_2010)
+
+# Mapping avg_low_inc_rent_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = avg_low_inc_rent_2010)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Avg Low-income rent 2010") +
+  ggtitle("Avg Low-income rent 2010") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of avg_low_inc_rent_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = avg_low_inc_rent_2010),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract Avg Low-income rent 2010') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$avg_low_inc_rent_2010)
+
+# Mapping per_low_inc_cost_burden_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = per_low_inc_cost_burden_2010)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Percent low-income cost-burdened 2010") +
+  ggtitle("Percent low-income cost-burdened 2010") +
+  labs(caption = "") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Distribution of per_low_inc_cost_burden_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = per_low_inc_cost_burden_2010),
+    bins = 100,
+    fill = "blue") +
+  xlab('Tract Percent low-income cost-burdened 2010') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$per_low_inc_cost_burden_2010)
+
+
+
+# med_rent_2019, avg_low_inc_rent_2019, per_low_inc_cost_burden_2019, rental_unit_change,  
+# all_rental_units_2019, total_affordable, med_income_2019, per_black_pop_2019, rent_control_2019,
+# med_home_value_2019, med_rent_2010, avg_low_inc_rent_2010, per_low_inc_cost_burden_2010
+
+
+
+# Regression
+regression_data <- combined_rent_data %>% 
+  mutate(med_income_2019 = med_income_2019/10000,
+         med_home_value_2019 = med_home_value_2019/10000,
+         all_rental_units_2019 = all_rental_units_2019/100,
+         total_affordable = total_affordable/100,
+         rental_unit_change = rental_unit_change/100,
+         rent_control_2019 = rent_control_2019/100,
+         med_rent_2010 = med_rent_2010/100) 
+
+med_rent.rental_unit_change.no_vars <- 
+  lm(med_rent_change ~ rental_unit_change + all_rental_units_2019 + total_affordable + med_rent_2010
+     + rent_control_2019, data = combined_rent_data)
+
+summary(med_rent.rental_unit_change.no_vars)
+
+med_rent.rental_unit_change <- 
+  lm(med_rent_2019 ~ rental_unit_change + all_rental_units_2019 + total_affordable + 
+       med_income_2019 + per_black_pop_2019 + rent_control_2019 + med_home_value_2019 +
+       med_rent_2010, data = regression_data)
+
+summary(med_rent.rental_unit_change)
+
+med_rent_change.rental_unit_change <- 
+  lm(med_rent_change ~ rental_unit_change + all_rental_units_2019 + total_affordable + 
+       med_income_2019 + per_black_pop_2019 + rent_control_2019 + med_home_value_2019 +
+       med_rent_2010, data = combined_rent_data)
+
+summary(med_rent_change.rental_unit_change)
+
+avg_low_rent.rental_unit_change <- 
+  lm(avg_low_inc_rent_2019 ~ rental_unit_change + all_rental_units_2019 + total_affordable + 
+       med_income_2019 + per_black_pop_2019 + rent_control_2019 + med_home_value_2019 +
+       avg_low_inc_rent_2010, data = regression_data)
+
+summary(avg_low_rent.rental_unit_change)
+
+per_cost_burden.rental_unit_change <- 
+  lm(per_low_inc_cost_burden_2019 ~ rental_unit_change + all_rental_units_2019 + total_affordable + 
+       med_income_2019 + per_black_pop_2019 + rent_control_2019 + med_home_value_2019 +
+       per_low_inc_cost_burden_2010, data = regression_data)
+
+summary(per_cost_burden.rental_unit_change)
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Change in median income by change in median rent 
+combined_rent_data %>% 
+  mutate(med_income_change = med_income_2019 - med_income_2010) %>% 
+  ggplot(aes(x = med_income_change, 
+             y = rental_unit_change)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  stat_cor(aes(label = ..rr.label..), geom = "label") +
+  theme_minimal()
+
+# Change in median rent by change in units
+combined_rent_data %>% 
+  ggplot(aes(x = med_rent_change, 
+             y = rental_unit_change)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  stat_cor(aes(label = ..rr.label..), geom = "label") +
+  theme_minimal()
+
+# change in low-income rent by change in units
+combined_rent_data %>% 
+  ggplot(aes(x = low_inc_rent_change, 
+             y = rental_unit_change)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  stat_cor(aes(label = ..rr.label..), geom = "label") +
+  theme_minimal()
+
+# change in low-income rent by total affordable
+combined_rent_data %>% 
+  ggplot(aes(x = low_inc_rent_change, 
+             y = total_affordable)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  stat_cor(aes(label = ..rr.label..), geom = "label") +
+  theme_minimal()
+
+# change in median rent by rent control units
+combined_rent_data %>% 
+  ggplot(aes(x = med_rent_change, 
+             y = rent_control_2019)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se=FALSE) +
+  stat_cor(aes(label = ..rr.label..), geom = "label") +
+  theme_minimal()
+
+# low-income renter population 2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = total_low_inc_2_2010)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Total Low-income 2010") +
+  ggtitle("Total Low-income 2010") +
+  labs(caption = "Source: American Community Survey 5-year estimates.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# low-income renter population 2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = total_low_inc_2_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Total Low-income renters 2019") +
+  ggtitle("Total Low-income 2019") +
+  labs(caption = "Source: American Community Survey 5-year estimates.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+test <- combined_rent_data %>% 
+  select(GEOID, total_low_inc_2_2010, total_low_inc_2_2019) %>% 
+  rename(`2010` = total_low_inc_2_2010,
+         `2019` = total_low_inc_2_2019) %>% 
+  pivot_longer(c(`2010`, `2019`), names_to = "year", values_to = "low_inc_population")
+
+test %>% 
+  ggplot(aes(x = GEOID,
+             y = low_inc_population,
+             fill = year)) +
+  geom_bar(stat="identity", position=position_dodge()) +
+  ggtitle("Total Low-income over time") +
+  labs(caption = "Source: American Community Survey 5-year estimates.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = all_rental_units_2010)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "All Rental Units 2010") +
+  ggtitle("All Rental Units 2010") +
+  labs(caption = "Source: American Community Survey 5-year estimates.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
 
 # Mapping percent change in median rent
 ggplot(data = combined_rent_data) +
@@ -352,7 +875,7 @@ combined_rent_data %>%
   ggplot() +
   geom_sf(aes(fill = med_rent_change)) +
   theme_void() +
-  scale_fill_viridis_c(name = "Rent Change 2010-2019") +
+  scale_fill_viridis_b(name = "Rent Change 2010-2019") +
   ggtitle("Largest increases in median rent concentrated in few Census tracts") +
   labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
@@ -372,16 +895,25 @@ ggplot(data = combined_rent_data) +
 
 # Distribution of change in median rent by dollars 
 combined_rent_data %>% 
-  ggplot() +
+  ggplot(aes(x = med_rent_change)) +
   geom_histogram(
-    aes(x = med_rent_change),
-    bins = 100,
+    aes(y = ..density..),
+    bins = 50,
     fill = "blue") +
+  geom_density() +
   scale_x_continuous(labels = dollar_format()) + 
   xlab('Tract change in median rent') +
   ylab('Tract count') +
   ggtitle(label = '', subtitle = '') +
   theme_minimal()
+
+combined_rent_data %>% 
+  ggplot(aes(x = med_rent_change)) +
+  geom_histogram(aes(y = ..density..)) +
+  geom_density() +
+  theme_minimal()
+
+summary(combined_rent_data$med_rent_change)
 
 # Distribution of change in median rent for tracts with decreasing black population 
 combined_rent_data %>% 
@@ -439,49 +971,6 @@ combined_rent_data %>%
   theme_minimal()
 
 summary(combined_rent_data$low_inc_rent_change)
-
-# Mapping unit change with limit to remove outliers
-combined_rent_data %>% 
-  mutate(
-    rental_unit_change = if_else(rental_unit_change > 1000, 1000, rental_unit_change),
-    rental_unit_change = if_else(rental_unit_change < -300, -300, rental_unit_change)) %>% 
-  ggplot() +
-  geom_sf(aes(fill = rental_unit_change)) +
-  theme_void() +
-  scale_fill_viridis_c(name = "Unit Change 2010-2019") +
-  ggtitle("Placeholder") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
-  theme(
-    plot.caption = element_text(hjust = 0)
-  )
-
-# Mapping unit change without outlier limit
-combined_rent_data %>% 
-  ggplot() +
-  geom_sf(aes(fill = rental_unit_change)) +
-  theme_void() +
-  scale_fill_distiller(name = "Unit Change 2010-2019",
-                       palette = "YlGnBu") +
-  ggtitle("Placeholder") +
-  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
-  theme(
-    plot.caption = element_text(hjust = 0)
-  )
-
-# Distribution of unit change  
-combined_rent_data %>% 
-  ggplot() +
-  geom_histogram(
-    aes(x = rental_unit_change),
-    bins = 100,
-    fill = "blue") +
-  scale_x_continuous(labels = comma_format()) + 
-  xlab('Tract change in units') +
-  ylab('Tract count') +
-  ggtitle(label = '', subtitle = '') +
-  theme_minimal()
-
-summary(combined_rent_data$rental_unit_change)
 
 # Mapping change in Black population 
 combined_rent_data %>% 
@@ -561,19 +1050,18 @@ combined_rent_data %>%
   geom_smooth(method = "lm", se=FALSE) +
   theme_minimal()
 
-# Change in rent by change in units
+# Change in rent by change in black population
 combined_rent_data %>% 
-  mutate(maj_black_2010 = if_else(per_black_pop_2010 > .50, 1, 0)) %>% 
-  ggplot(aes(x = med_rent_change, 
-             y = rental_unit_change)) + 
-  geom_point(aes(color = as.character(maj_black_2010))) +
+  ggplot(aes(y = med_rent_change, 
+             x = black_pop_change)) + 
+  geom_point() +
   geom_smooth(method = "lm", se=FALSE) +
   theme_minimal()
 
-# Change in rent by change in black population
+# Change in units by 2019 total
 combined_rent_data %>% 
-  ggplot(aes(x = med_rent_change, 
-             y = black_pop_change)) + 
+  ggplot(aes(x = all_rental_units_2010, 
+             y = all_rental_units_2019)) + 
   geom_point() +
   geom_smooth(method = "lm", se=FALSE) +
   theme_minimal()
