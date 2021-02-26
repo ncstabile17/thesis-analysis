@@ -420,8 +420,8 @@ combined_rent_data %>%
   ggplot() +
   geom_sf(aes(fill = rental_unit_change)) +
   theme_void() +
-  scale_fill_viridis_b(name = "Unit Change 2010-2019") +
-  ggtitle("Placeholder") +
+  scale_fill_viridis_b(name = "Unit Change") +
+  ggtitle("Increases in Rental Units Concentrated in Few Census Tracts") +
   labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
     plot.caption = element_text(hjust = 0)
@@ -708,7 +708,12 @@ regression_data <- combined_rent_data %>%
          total_affordable = total_affordable/100,
          rental_unit_change = rental_unit_change/100,
          rent_control_2019 = rent_control_2019/100,
-         med_rent_2010 = med_rent_2010/100) 
+         med_rent_2010 = med_rent_2010/100)
+
+regression_data_out <- regression_data %>% 
+  st_set_geometry(NULL)
+
+write.csv(regression_data_out, "data/regression_data.csv")
 
 med_rent.rental_unit_change.no_vars <- 
   lm(med_rent_change ~ rental_unit_change + all_rental_units_2019 + total_affordable + med_rent_2010
@@ -754,6 +759,195 @@ summary(per_cost_burden.rental_unit_change)
 
 
 
+
+# Getting population data for graph
+
+years <- lst(2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019)
+
+pop_data <- map_dfr(
+  years,
+  ~ get_acs(
+    geography = "state",
+    variables = c("B03002_001", "B03002_003", "B03002_004", "B03002_012"),
+    state = 11,
+    county = 1,
+    year = .x,
+    survey = "acs1"
+  ),
+  .id = "year"
+)
+
+low_inc_pop_data <- map_dfr(
+  years,
+  ~ get_acs(
+    geography = "state",
+    variables = c("B19001_002", "B19001_003", "B19001_004",
+                  "B19001_005", "B19001_006", "B19001_007", "B19001_008",
+                  "B19001_009", "B19001_010"),
+    state = 11,
+    county = 1,
+    year = .x,
+    survey = "acs1"
+  ),
+  .id = "year"
+)
+
+low_inc_pop_data_combined <- low_inc_pop_data %>% 
+  group_by(year, NAME, GEOID) %>% 
+  summarize(estimate = sum(estimate)) %>% 
+  mutate(variable = "Low-Income HHs")
+
+pop_data <- pop_data %>% 
+  mutate(variable = replace(variable, variable == "B03002_001", "Total Population"),
+         variable = replace(variable, variable == "B03002_003", "White"),
+         variable = replace(variable, variable == "B03002_004", "Black"),
+         variable = replace(variable, variable == "B03002_012", "Hispanic or Latino")) %>% 
+  select(-moe)
+
+pop_data %>% 
+  ggplot(aes(x = year,
+             y = estimate,
+             group = variable)) + 
+  geom_line(aes(color = variable)) +
+  scale_y_continuous(labels = comma_format()) + 
+  theme_minimal()
+
+year_change <- lst(2010, 2019)
+pop_data_change <- map_dfr(
+  year_change,
+  ~ get_acs(
+    geography = "state",
+    variables = c("B03002_001", "B03002_003", "B03002_004", "B03002_012"),
+    state = 11,
+    county = 1,
+    year = .x,
+  ),
+  .id = "year"
+)
+
+pop_data_change <- pop_data_change %>% 
+  mutate(variable = replace(variable, variable == "B03002_001", "Total Population"),
+         variable = replace(variable, variable == "B03002_003", "White"),
+         variable = replace(variable, variable == "B03002_004", "Black"),
+         variable = replace(variable, variable == "B03002_012", "Hispanic or Latino")) %>% 
+  select(-moe)
+
+
+# Presentation figs
+pop_data_change %>% 
+  filter(year == "2010" | year == "2019") %>% 
+  ggplot(aes(x = reorder(variable, -estimate),
+             y = estimate,
+             fill = year)) + 
+  geom_bar(stat="identity", 
+           position=position_dodge(),
+           width = .75) +
+  scale_y_continuous(labels = comma_format(),
+                     breaks = c(0, 100000, 200000, 300000, 400000, 500000, 600000, 700000),
+                     minor_breaks = NULL) + 
+  scale_fill_manual(values = c("#2a7d8d", "#b6db43")) +
+  theme_minimal() +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(face="bold", 
+                                   size=14,
+                                   vjust = 5),
+        axis.text.y = element_text(size = 10),
+        plot.title = element_text(size = 18, face = "bold"),
+        plot.caption = element_text(hjust = 0,
+                                    size = 8)) +
+  labs(fill = "Year",
+       title = "Non-Hispanic White residents account for majority of population change",
+       caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.")
+  
+
+
+# Mapping rental_unit_change with limit to remove outliers
+combined_rent_data %>% 
+  mutate(
+    rental_unit_change = if_else(rental_unit_change > 1000, 1000, rental_unit_change),
+    rental_unit_change = if_else(rental_unit_change < -400, -400, rental_unit_change)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = rental_unit_change)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Unit Change",
+                       breaks = c(-300, 0, 300, 600, 900)) +
+  ggtitle("Increases in rental units concentrated in few Census tracts") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
+  theme(
+    plot.title = element_text(size = 18, 
+                              face = "bold",
+                              vjust = -2),
+    plot.caption = element_text(hjust = 0,
+                                size = 8,
+                                vjust = 10)
+  )
+
+# Mapping median rent change with limit on rent change (to reduce outlier skewing color scheme)
+combined_rent_data %>% 
+  mutate(
+    med_rent_change = if_else(med_rent_change > 1200, 1200, med_rent_change),
+    med_rent_change = if_else(med_rent_change < -100, -100, med_rent_change)) %>% 
+  ggplot() +
+  geom_sf(aes(fill = med_rent_change)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Median Rent \nChange") +
+  ggtitle("Changes in median rent vary widely by Census tract") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
+  theme(
+    plot.title = element_text(size = 18, 
+                              face = "bold",
+                              vjust = -2),
+    plot.caption = element_text(hjust = 0,
+                                size = 8,
+                                vjust = 10)
+  )
+
+# Mapping per_black_pop_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = per_black_pop_2019)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Percent Black \nPopulation",
+                       n.breaks = 6) +
+  ggtitle("Racial segregation in DC is stark") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2015-2019.") +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.caption = element_text(hjust = 0,
+                                size = 8)
+  )
+
+# Mapping per_low_inc_cost_burden_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = per_low_inc_cost_burden_2019)) +
+  theme_void() +
+  scale_fill_viridis_b(name = "Percent low-income \nrenters cost-burdened",
+                       breaks = c(0.2, 0.4, 0.6, 0.8)) +
+  ggtitle("Low-income renters are universally cost-burdened") +
+  labs(caption = "Source: American Community Survey 5-year estimates 2015-2019.") +
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),
+    plot.caption = element_text(hjust = 0,
+                                size = 8)
+  )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+all_pop <- rbind(pop_data, low_inc_pop_data_combined)
 
 
 # Change in median income by change in median rent 
@@ -949,8 +1143,7 @@ summary(combined_rent_data$med_rent_change)
 ggplot(data = combined_rent_data) +
   geom_sf(aes(fill = low_inc_rent_change)) +
   theme_void() +
-  scale_fill_distiller(name = "Low-inc Rent Change 2010-2019",
-                       palette = "YlGnBu") +
+  scale_fill_viridis_c(name = "Low-inc Rent Change 2010-2019") +
   ggtitle("Placeholder") +
   labs(caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.") +
   theme(
