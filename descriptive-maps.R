@@ -331,7 +331,7 @@ make_map <- function(.var_name) {
 # all_rental_units_2019, total_affordable, med_income_2019, per_black_pop_2019, rent_control_2019,
 # med_home_value_2019, med_rent_2010, avg_low_inc_rent_2010, per_low_inc_cost_burden_2010
 
-# Mapping and getting distribution of all variables
+# Mapping and getting distribution of all variables in analysis
 
 # Mapping med_rent_2019
 combined_rent_data %>% 
@@ -427,7 +427,7 @@ combined_rent_data %>%
     plot.caption = element_text(hjust = 0)
   )
 
-# Mapping rental_unit_change with limit to remove outliers
+# Mapping rental_unit_change without limit to remove outliers
 combined_rent_data %>% 
   ggplot() +
   geom_sf(aes(fill = rental_unit_change)) +
@@ -459,7 +459,7 @@ combined_rent_data %>%
   ggplot() +
   geom_sf(aes(fill = all_rental_units_2019)) +
   theme_void() +
-  scale_fill_viridis_c(name = "All Rental Units 2019") +
+  scale_fill_viridis_b(name = "All Rental Units 2019") +
   ggtitle("All Rental Units 2019") +
   labs(caption = "Source: American Community Survey 5-year estimates 2015-2019.") +
   theme(
@@ -471,7 +471,7 @@ combined_rent_data %>%
   ggplot() +
   geom_histogram(
     aes(x = all_rental_units_2019),
-    bins = 100,
+    bins = 75,
     fill = "blue") +
   scale_x_continuous(labels = comma_format()) + 
   xlab('Tract units in 2019') +
@@ -480,6 +480,21 @@ combined_rent_data %>%
   theme_minimal()
 
 summary(combined_rent_data$all_rental_units_2019)
+
+# Distribution of all_rental_units_2010  
+combined_rent_data %>% 
+  ggplot() +
+  geom_histogram(
+    aes(x = all_rental_units_2010),
+    bins = 75,
+    fill = "blue") +
+  scale_x_continuous(labels = comma_format()) + 
+  xlab('Tract units in 2010') +
+  ylab('Tract count') +
+  ggtitle(label = '', subtitle = '') +
+  theme_minimal()
+
+summary(combined_rent_data$all_rental_units_2010)
 
 # Mapping total_affordable
 combined_rent_data %>% 
@@ -862,6 +877,37 @@ pop_data_change %>%
        caption = "Source: American Community Survey 5-year estimates 2006-2010 and 2015-2019.")
   
 
+
+
+
+
+
+
+
+
+# Mapping all_rental_units_2010
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = all_rental_units_2010)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Total rental units 2010") +
+  ggtitle("Total Low-income 2019") +
+  labs(caption = "Source: American Community Survey 5-year estimates.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
+
+# Mapping all_rental_units_2019
+combined_rent_data %>% 
+  ggplot() +
+  geom_sf(aes(fill = all_rental_units_2019)) +
+  theme_void() +
+  scale_fill_viridis_c(name = "Total rental units 2019") +
+  ggtitle("Total Low-income 2019") +
+  labs(caption = "Source: American Community Survey 5-year estimates.") +
+  theme(
+    plot.caption = element_text(hjust = 0)
+  )
 
 # Mapping rental_unit_change with limit to remove outliers
 combined_rent_data %>% 
